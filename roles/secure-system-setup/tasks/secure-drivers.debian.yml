@@ -1,0 +1,66 @@
+---
+- name: Secure system drivers
+  when:
+    - ansible_facts['virtualization_type'] | default('') != 'lxc'
+  block:
+    - name: Disable uncommon filesystems
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/uncommon-fs.conf"
+        content: |
+          install cramfs /bin/true
+          install freevxfs /bin/true
+          install jffs2 /bin/true
+          install hfs /bin/true
+          install hfsplus /bin/true
+          install udf /bin/true
+          install gfs2 /bin/true
+
+    - name: Disable uncommon network protocols
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/uncommon-net.conf"
+        content: |
+          install dccp /bin/true
+          install sctp /bin/true
+          install rds /bin/true
+          install tipc /bin/true
+
+    - name: Disable Firewire drivers
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/firewire.conf"
+        content: |
+          install firewire-core /bin/true
+          install firewire-ohci /bin/true
+          install firewire-sbp2 /bin/true
+
+    - name: Disable Bluetooth drivers
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/bluetooth.conf"
+        content: |
+          install bluetooth /bin/true
+
+    - name: Disable uncommon sound drivers
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/uncommon-sound.conf"
+        content: |
+          install snd-usb-audio /bin/true
+          install snd-usb-caiaq /bin/true
+          install snd-usb-us122l /bin/true
+          install snd-usb-usx2y /bin/true
+          install snd-usb-audio /bin/true
+
+    - name: Disable uncommon input drivers
+      ansible.builtin.copy:
+        dest: "/etc/modprobe.d/uncommon-input.conf"
+        content: |
+          install joydev /bin/true
+          install pcspkr /bin/true
+          install serio_raw /bin/true
+          install snd-rawmidi /bin/true
+          install snd-seq-midi /bin/true
+          install snd-seq-oss /bin/true
+          install snd-seq /bin/true
+          install snd-seq-device /bin/true
+          install snd-timer /bin/true
+          install snd /bin/true
+  tags:
+    - secure-system-drivers

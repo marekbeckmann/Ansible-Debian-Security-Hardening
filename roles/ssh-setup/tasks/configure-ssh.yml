@@ -1,0 +1,90 @@
+---
+- name: Install Google Authenticator PAM module
+  ansible.builtin.apt:
+    name: libpam-google-authenticator
+    state: present
+  when:
+    - osfamily == "debian"
+    - ssh_enable_2fa is true
+
+- name: Detect Proxmox VE
+  ansible.builtin.stat:
+    path: /etc/pve
+  register: is_pve
+
+- name: Backup existing sshd_config file
+  ansible.builtin.copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config_backup
+    owner: root
+    group: root
+    mode: "0644"
+    remote_src: true
+
+- name: Ensure SSH groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - ssh
+    - _ssh
+
+- name: Add root user to SSH groups on PVE hosts or when root login permitted
+  ansible.builtin.user:
+    name: root
+    groups:
+      - ssh
+      - _ssh
+    append: true
+  when:
+    - (is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)) or (permit_root_login | default(false) | bool)
+
+- name: Add admin and service users to SSH groups
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups:
+      - ssh
+      - _ssh
+    append: true
+  loop: "{{ ssh_admin_users | default(['ansible']) }}"
+  ignore_errors: true
+
+- name: Configure root SSH client config for PVE cluster inter-node connectivity
+  ansible.builtin.blockinfile:
+    path: /root/.ssh/config
+    create: true
+    owner: root
+    group: root
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED PVE CLUSTER INTER-NODE SSH"
+    block: |
+      Host {{ ssh_pve_cluster_hosts }}
+          StrictHostKeyChecking accept-new
+          UserKnownHostsFile /root/.ssh/known_hosts /etc/pve/priv/known_hosts
+  when:
+    - is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)
+    - ssh_pve_cluster_hosts | default('') | length > 0
+
+- name: Deploy hardened sshd_config template
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0640"
+  notify:
+    - Restart SSH
+
+- name: Flush handlers to immediately apply SSH configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify Google Authenticator presence in PAM configuration
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/sshd
+    regexp: "pam_google_authenticator.so"
+    state: absent
+  when:
+    - ssh_enable_2fa is true
+  check_mode: true
+  register: google_auth_check
+  changed_when: false

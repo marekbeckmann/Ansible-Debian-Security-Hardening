@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  author: Marek Beckmann
+  description: UFW firewall configuration and rules management
+  company: https://github.com/marekbeckmann
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - all
+  galaxy_tags:
+    - ufw
+    - firewall
+    - pve
+    - proxmox
+    - security

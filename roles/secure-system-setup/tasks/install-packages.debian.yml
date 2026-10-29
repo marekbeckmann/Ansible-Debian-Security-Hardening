@@ -1,0 +1,30 @@
+---
+- name: Install security packages
+  block:
+    - name: Load required security packages variables
+      ansible.builtin.include_vars:
+        file: "packages.{{ osfamily }}.yml"
+
+    - name: Determine security packages to install
+      ansible.builtin.set_fact:
+        effective_security_packages: >-
+          {{
+            (packages | reject('match', '^(audit|audisp|rng-tools|powermgmt)') | list)
+            if (ansible_facts['virtualization_type'] | default('') == 'lxc')
+            else packages
+          }}
+
+    - name: Install security packages
+      ansible.builtin.apt:
+        name: "{{ effective_security_packages }}"
+        state: present
+        update_cache: false
+        install_recommends: false
+        clean: true
+      register: sec_pkgs_install
+      retries: 3
+      delay: 5
+      until: sec_pkgs_install is succeeded
+  tags:
+    - secure-system-pkgs
+    - always

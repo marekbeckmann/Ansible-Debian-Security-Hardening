@@ -1,0 +1,53 @@
+---
+- name: Apply system hardening and security policies
+  block:
+    - name: Set custom distribution facts
+      ansible.builtin.set_fact:
+        distro: "{{ ansible_facts['distribution'] | lower }}"
+        osfamily: "{{ ansible_facts['os_family'] | lower }}"
+      tags:
+        - always
+
+    - name: Install required security packages
+      ansible.builtin.include_tasks: "install-packages.{{ osfamily }}.yml"
+      tags:
+        - secure-system-pkgs
+        - always
+
+    - name: Apply secure system configuration settings
+      ansible.builtin.include_tasks: "secure-system-settings.{{ osfamily }}.yml"
+      tags:
+        - secure-system-settings
+
+    - name: Apply secure kernel parameters
+      ansible.builtin.include_tasks: "secure-kernel.{{ osfamily }}.yml"
+      when:
+        - not (is_lxc | default(false) | bool)
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+      tags:
+        - secure-system-kernel
+
+    - name: Disable insecure system drivers
+      ansible.builtin.include_tasks: "secure-drivers.{{ osfamily }}.yml"
+      when:
+        - not (is_lxc | default(false) | bool)
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+      tags:
+        - secure-system-drivers
+
+    - name: Apply secure file permissions
+      ansible.builtin.include_tasks: "secure-file-permissions.{{ osfamily }}.yml"
+      tags:
+        - secure-system-permissions
+
+    - name: Setup unattended security upgrades
+      ansible.builtin.include_tasks: "setup-unattended-patches.{{ osfamily }}.yml"
+      tags:
+        - setup-system-unattended-patches
+
+    - name: Configure Fail2ban intrusion prevention
+      ansible.builtin.include_tasks: "setup-fail2ban.{{ osfamily }}.yml"
+      tags:
+        - secure-system-fail2ban
+  tags:
+    - secure-system-setup

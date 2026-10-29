@@ -1,0 +1,127 @@
+{{ ansible_managed | comment('c') }}
+
+// Erase unattended-upgrades configuration tree
+{% for option in __clear_options %}
+#clear {{ option }};
+{% endfor %}
+
+//========================================================================//
+//                        Unattended-Upgrades Config                      //    
+//========================================================================//
+
+APT::Periodic::Unattended-Upgrade "1";
+
+{% if unattended_update_package_list is defined %}
+APT::Periodic::Update-Package-Lists "{{unattended_update_package_list}}";
+{% endif %}
+
+{% if unattended_download_upgradeable is defined %}
+APT::Periodic::Download-Upgradeable-Packages "{{unattended_download_upgradeable}}";
+{% endif %}
+
+{% if unattended_autoclean_interval is defined %}
+APT::Periodic::AutocleanInterval "{{unattended_autoclean_interval}}";
+{% endif %}
+
+{% if unattended_clean_interval is defined %}
+APT::Periodic::CleanInterval "{{unattended_clean_interval}}";
+{% endif %}
+
+{% if unattended_verbose is defined %}
+APT::Periodic::Verbose "{{unattended_verbose}}";
+{% endif %}
+
+{% if unattended_random_sleep is defined %}
+APT::Periodic::RandomSleep "{{unattended_random_sleep}}";
+{% endif %}
+
+Unattended-Upgrade::Origins-Pattern {
+{% if origins is defined %}
+  {%- for origin in origins %}
+    "{{ origin }}";
+  {%- endfor %}
+{% endif %}
+};
+
+Unattended-Upgrade::Package-Blacklist {
+{% for package in unattended_package_blacklist %}
+    "{{package}}";
+{% endfor %}
+};
+
+{% if not unattended_autofix_interrupted_dpkg %}
+Unattended-Upgrade::AutoFixInterruptedDpkg "false";
+{% else %}
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+{% endif %}
+
+Unattended-Upgrade::MinimalSteps "{{ unattended_minimal_steps | lower }}";
+
+{% if unattended_install_on_shutdown %}
+Unattended-Upgrade::InstallOnShutdown "true";
+{% endif %}
+
+{% if unattended_mail %}
+Unattended-Upgrade::Mail "{{unattended_mail}}";
+{% endif %}
+
+{% if unattended_mail_sender %}
+Unattended-Upgrade::Sender "{{unattended_mail_sender}}";
+{% endif %}
+
+{% if unattended_mail_only_on_error %}
+Unattended-Upgrade::MailOnlyOnError "true";
+{% endif %}
+
+{% if unattended_mail_report %}
+Unattended-Upgrade::MailReport "{{ unattended_mail_report }}";
+{% endif %}
+
+{% if unattended_remove_unused_dependencies %}
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+{% endif %}
+
+{% if not unattended_remove_new_unused_dependencies %}
+Unattended-Upgrade::Remove-New-Unused-Dependencies "false";
+{% endif %}
+
+{% if unattended_remove_unused_kernel_packages %}
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+{% endif %}
+
+{% if unattended_automatic_reboot %}
+Unattended-Upgrade::Automatic-Reboot "true";
+{% endif %}
+
+{% if unattended_automatic_reboot_time %}
+Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_automatic_reboot_time }}";
+{% endif %}
+
+{% if unattended_update_days is defined %}
+Unattended-Upgrade::Update-Days {{ unattended_update_days }};
+{% endif %}
+
+{% if unattended_ignore_apps_require_restart %}
+Unattended-Upgrade::IgnoreAppsRequireRestart "true";
+{% endif %}
+{% if unattended_syslog_enable %}
+
+Unattended-Upgrade::SyslogEnable "{{ unattended_syslog_enable }}";
+{% if unattended_syslog_facility is defined %}
+Unattended-Upgrade::SyslogFacility "{{ unattended_syslog_facility }}";
+{% endif %}
+{% endif %}
+
+{% if unattended_dpkg_options %}
+Dpkg::Options {
+{% for dpkg_option in unattended_dpkg_options %}
+    "{{ dpkg_option }}";
+{% endfor %}
+};
+{% endif %}
+
+{% if unattended_dl_limit is defined %}
+Acquire::http::Dl-Limit "{{ unattended_dl_limit }}";
+{% endif %}
+
+Unattended-Upgrade::OnlyOnACPower "{{ unattended_only_on_ac_power | to_json }}";

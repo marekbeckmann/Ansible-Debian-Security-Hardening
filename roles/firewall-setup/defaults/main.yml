@@ -1,0 +1,24 @@
+---
+# Defaults for firewall-setup role
+
+# --- UFW settings (standard Debian nodes) ---
+ufw_enabled: true
+ufw_reset_rules: false
+
+# --- Proxmox VE Firewall settings (hypervisor nodes) ---
+pve_firewall_enable: 1
+pve_firewall_policy_in: DROP
+pve_firewall_policy_out: ACCEPT
+pve_firewall_ebtables: 1
+pve_firewall_group_name: basic-ruleset
+
+# List of interfaces to bind rules to (e.g. ['bond0', 'bond1', 'vmbr0']).
+# If empty, rules apply to all interfaces to prevent lockouts on nodes without bonds.
+pve_firewall_interfaces: []
+
+# Ensure host-level firewall is enabled in /etc/pve/nodes/<hostname>/host.fw
+pve_firewall_enable_host: true
+pve_firewall_nf_conntrack_allow_invalid: 1
+
+# Additional custom rules to append to the security group
+pve_firewall_custom_rules: []

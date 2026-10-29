@@ -1,0 +1,20 @@
+---
+# Defaults for ssh-setup role
+
+ssh_port: 22
+ssh_groups_allow: "ssh _ssh"
+ssh_service_user: "ansible"
+ssh_admin_users:
+  - ansible
+
+# Proxmox cluster inter-node client configuration
+ssh_pve_cluster_hosts: ""
+
+# Privilege settings
+permit_root_login: false
+ssh_tunnel: false
+ssh_enable_2fa: false
+
+# Client alive timeouts
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2

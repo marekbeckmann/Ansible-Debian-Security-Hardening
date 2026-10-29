@@ -1,0 +1,115 @@
+---
+- name: Setup unattended upgrades
+  block:
+    - name: Remove old unattended-upgrades config
+      ansible.builtin.file:
+        path: /etc/apt/apt.conf.d/50unattended-upgrades
+        state: absent
+
+    - name: Reinstall unattended-upgrades package
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+        force_apt_get: true
+        dpkg_options: "force-confnew,force-confmiss"
+        update_cache: true
+      register: apt_unattended_install
+      retries: 5
+      delay: 5
+      until: apt_unattended_install is succeeded
+
+    - name: Deploy default unattended-upgrades configuration
+      ansible.builtin.copy:
+        src: /usr/share/unattended-upgrades/50unattended-upgrades
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: "0644"
+        remote_src: true
+
+
+    - name: Deploy Apt auto-upgrades configuration
+      ansible.builtin.template:
+        src: "unattended-upgrades.j2"
+        dest: "/etc/apt/apt.conf.d/90-ansible-unattended-upgrades"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Validate apt-daily timer expression
+      ansible.builtin.command:
+        cmd: 'systemd-analyze calendar "{{ unattended_apt_daily_oncalendar }}"'
+      register: _apt_daily
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Validate apt-daily-upgrade timer expression
+      ansible.builtin.command:
+        cmd: 'systemd-analyze calendar "{{ unattended_apt_daily_upgrade_oncalendar }}"'
+      register: _apt_daily_upgrade
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Ensure apt-daily.timer.d directory exists
+      ansible.builtin.file:
+        path: "/etc/systemd/system/apt-daily.timer.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      register: _apt_daily_timer_d
+
+    - name: Ensure apt-daily-upgrade.timer.d directory exists
+      ansible.builtin.file:
+        path: "/etc/systemd/system/apt-daily-upgrade.timer.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      register: _apt_daily_upgrade_timer_d
+
+    - name: Deploy apt-daily timer schedule override
+      ansible.builtin.template:
+        src: "apt_daily_override.conf.j2"
+        dest: "/etc/systemd/system/apt-daily.timer.d/schedule_override.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      when:
+        - "_apt_daily.rc == 0"
+        - _apt_daily_timer_d is defined
+      notify:
+        - Restart apt-daily timer
+
+    - name: Deploy apt-daily-upgrade timer schedule override
+      ansible.builtin.template:
+        src: "apt_daily_upgrade_override.conf.j2"
+        dest: "/etc/systemd/system/apt-daily-upgrade.timer.d/schedule_override.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      when:
+        - "_apt_daily_upgrade.rc == 0"
+        - _apt_daily_upgrade_timer_d is defined
+      notify:
+        - Restart apt-daily-upgrade timer
+
+    - name: Remove legacy apt-daily timer override
+      ansible.builtin.file:
+        path: "/etc/systemd/system/apt-daily.timer.d/schedule_override.conf"
+        state: absent
+      when: _apt_daily.rc is defined and _apt_daily.rc != 0
+      notify:
+        - Restart apt-daily timer
+
+    - name: Remove legacy apt-daily-upgrade timer override
+      ansible.builtin.file:
+        path: "/etc/systemd/system/apt-daily-upgrade.timer.d/schedule_override.conf"
+        state: absent
+      when: _apt_daily_upgrade.rc is defined and _apt_daily_upgrade.rc != 0
+      notify:
+        - Restart apt-daily-upgrade timer
+  tags:
+    - setup-system-unattended-patches

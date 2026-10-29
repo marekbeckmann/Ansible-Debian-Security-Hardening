@@ -1,0 +1,80 @@
+---
+- name: Secure system settings
+  block:
+    - name: Add proc mount options to /etc/fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "proc     /proc     proc     defaults,hidepid=2     0     0"
+        state: present
+      when:
+        - secure_proc_hidepid | default(false) | bool
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+
+    - name: Change Hashing Rounds and PW policy in /etc/login.defs
+      ansible.builtin.replace:
+        path: /etc/login.defs
+        regexp: "{{ item.pattern }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - pattern: '^#?\s*SHA_CRYPT_MIN_ROUNDS.*'
+          replace: "SHA_CRYPT_MIN_ROUNDS 1000000"
+        - pattern: '^#?\s*SHA_CRYPT_MAX_ROUNDS.*'
+          replace: "SHA_CRYPT_MAX_ROUNDS 1000000"
+        - pattern: '^\s*PASS_MAX_DAYS.*'
+          replace: "PASS_MAX_DAYS 180"
+        - pattern: '^\s*PASS_MIN_DAYS.*'
+          replace: "PASS_MIN_DAYS 1"
+        - pattern: '^\s*PASS_WARN_AGE.*'
+          replace: "PASS_WARN_AGE 28"
+        - pattern: '^\s*UMASK.*'
+          replace: "UMASK 027"
+
+    - name: Restart and enable auditd service
+      ansible.builtin.systemd:
+        name: auditd
+        state: restarted
+        enabled: true
+      when:
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+
+    - name: Disable Crash Dump in /etc/security/limits.conf
+      ansible.builtin.lineinfile:
+        path: /etc/security/limits.conf
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "* hard core 0"
+        - "* soft core 0"
+
+    - name: Detect Proxmox VE
+      ansible.builtin.stat:
+        path: /etc/pve
+      register: is_pve
+
+    - name: Ensure root account password is not locked on Proxmox nodes and containers
+      ansible.builtin.user:
+        name: root
+        password_lock: false
+      when:
+        - is_pve.stat.isdir is defined and is_pve.stat.isdir
+
+    - name: Lock root account password on non-Proxmox nodes
+      ansible.builtin.user:
+        name: root
+        password_lock: true
+      when:
+        - lock_root_account | default(true) | bool
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+        - not (is_pve.stat.isdir is defined and is_pve.stat.isdir)
+
+    - name: Remove insecure networking packages
+      ansible.builtin.apt:
+        name:
+          - telnet
+          - nis
+          - ntpdate
+        state: absent
+        purge: true
+        
+  tags:
+    - secure-system-settings

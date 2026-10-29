@@ -1,0 +1,34 @@
+[OPTIONS]
+
+enable: {{ pve_firewall_enable | default(1) }}
+policy_out: {{ pve_firewall_policy_out | default('ACCEPT') }}
+policy_in: {{ pve_firewall_policy_in | default('DROP') }}
+ebtables: {{ pve_firewall_ebtables | default(1) }}
+
+[RULES]
+
+{% if pve_firewall_interfaces is defined and pve_firewall_interfaces | length > 0 %}
+{% for iface in pve_firewall_interfaces %}
+GROUP {{ pve_firewall_group_name | default('basic-ruleset') }} -i {{ iface }}
+{% endfor %}
+{% else %}
+GROUP {{ pve_firewall_group_name | default('basic-ruleset') }}
+{% endif %}
+
+[group {{ pve_firewall_group_name | default('basic-ruleset') }}] # {{ pve_firewall_group_name | default('basic-ruleset') | upper }}
+
+IN Ceph(ACCEPT) -log nolog
+IN SSH(ACCEPT) -log nolog
+IN Web(ACCEPT) -log nolog
+IN Ping(ACCEPT) -log nolog
+IN ACCEPT -p icmp -log nolog
+IN ACCEPT -p tcp -dport 8006 -log nolog # Proxmox Web GUI & API
+IN ACCEPT -p tcp -dport 5900:5999 -log nolog # VNC Web Console
+IN ACCEPT -p tcp -dport 3128 -log nolog # SPICE Proxy
+IN ACCEPT -p tcp -dport 60000:60050 -log nolog # PVE VM Live Migration
+IN ACCEPT -p udp -dport 5404:5412 -log nolog # Corosync Cluster Traffic
+{% if pve_firewall_custom_rules is defined %}
+{% for rule in pve_firewall_custom_rules %}
+{{ rule }}
+{% endfor %}
+{% endif %}

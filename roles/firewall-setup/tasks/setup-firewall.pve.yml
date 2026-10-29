@@ -1,0 +1,129 @@
+---
+- name: Setup Proxmox firewall rules
+  block:
+    - name: Ensure Proxmox firewall configuration directory exists
+      ansible.builtin.file:
+        path: /etc/pve/firewall
+        state: directory
+
+    - name: Ensure firewall backup directory exists
+      ansible.builtin.file:
+        path: /var/backups/pve-firewall
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Check if existing cluster firewall configuration exists
+      ansible.builtin.stat:
+        path: /etc/pve/firewall/cluster.fw
+      register: pve_cluster_fw_stat
+
+    - name: Backup current cluster firewall configuration
+      ansible.builtin.copy:
+        src: /etc/pve/firewall/cluster.fw
+        dest: /var/backups/pve-firewall/cluster.fw.bak
+        remote_src: true
+      changed_when: false
+      when: pve_cluster_fw_stat.stat.exists
+
+    - name: "Render cluster firewall configuration"
+      vars:
+        pve_firewall_policy_in: "ACCEPT"
+      ansible.builtin.template:
+        src: proxmox-fw.conf.j2
+        dest: /tmp/pve_cluster_stage1.fw
+        owner: root
+        group: root
+        mode: "0600"
+      changed_when: false
+
+    - name: "Render final cluster firewall configuration"
+      ansible.builtin.template:
+        src: proxmox-fw.conf.j2
+        dest: /tmp/pve_cluster.fw
+        owner: root
+        group: root
+        mode: "0600"
+      changed_when: false
+
+    - name: Check if cluster firewall configuration needs updating
+      ansible.builtin.command: cmp -s /tmp/pve_cluster.fw /etc/pve/firewall/cluster.fw
+      register: pve_cluster_fw_diff
+      failed_when: false
+      changed_when: false
+
+    - name: Stage basic-ruleset security group in Datacenter firewall rules before enforcing DROP policy
+      ansible.builtin.command: cp -f /tmp/pve_cluster_stage1.fw /etc/pve/firewall/cluster.fw
+      when: pve_cluster_fw_diff.rc != 0
+
+    - name: Query Datacenter firewall rules to verify basic-ruleset security group is attached and enabled
+      ansible.builtin.command: pvesh get /cluster/firewall/rules --output-format json
+      register: pve_cluster_rules_json
+      changed_when: false
+
+    - name: Verify basic-ruleset security group is present and enabled in Datacenter firewall rules prior to DROP policy
+      vars:
+        parsed_cluster_rules: "{{ pve_cluster_rules_json.stdout | default('[]') | from_json }}"
+        active_basic_ruleset_rules: >-
+          {{
+            parsed_cluster_rules
+            | selectattr('type', 'defined')
+            | selectattr('type', 'equalto', 'group')
+            | selectattr('action', 'defined')
+            | selectattr('action', 'equalto', (pve_firewall_group_name | default('basic-ruleset')))
+            | selectattr('enable', 'defined')
+            | selectattr('enable', 'equalto', 1)
+            | list
+          }}
+      ansible.builtin.assert:
+        that:
+          - active_basic_ruleset_rules | length > 0
+        fail_msg: >-
+          Refusing to set Datacenter Firewall policy_in={{ pve_firewall_policy_in | default('DROP') }}:
+          Security Group '{{ pve_firewall_group_name | default('basic-ruleset') }}' is not active in /cluster/firewall/rules!
+
+    - name: Deploy final cluster firewall configuration with Input Policy {{ pve_firewall_policy_in | default('DROP') }} to pmxcfs
+      ansible.builtin.command: cp -f /tmp/pve_cluster.fw /etc/pve/firewall/cluster.fw
+      when: pve_cluster_fw_diff.rc != 0
+      notify: Restart PVE firewall
+
+    - name: Ensure Proxmox node host firewall configuration exists and is enabled
+      ansible.builtin.copy:
+        dest: "/etc/pve/nodes/{{ ansible_facts['hostname'] }}/host.fw"
+        content: |
+          [OPTIONS]
+          enable: {{ 1 if (pve_firewall_enable_host | default(true) | bool) else 0 }}
+          {% if pve_firewall_nf_conntrack_allow_invalid is defined %}
+          nf_conntrack_allow_invalid: {{ pve_firewall_nf_conntrack_allow_invalid }}
+          {% endif %}
+        owner: root
+        group: root
+        mode: "0600"
+      when:
+        - pve_firewall_enable_host | default(true) | bool
+      notify: Restart PVE firewall
+
+    - name: Clean up temporary firewall staging files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      changed_when: false
+      loop:
+        - /tmp/pve_cluster_stage1.fw
+        - /tmp/pve_cluster.fw
+
+    - name: Validate Proxmox firewall configuration
+      ansible.builtin.command: pve-firewall compile
+      changed_when: false
+
+    - name: Ensure Proxmox firewall service is running and enabled
+      ansible.builtin.systemd:
+        name: pve-firewall
+        state: started
+        enabled: true
+
+  become: true
+  tags:
+    - firewall-setup
+    - pve-firewall-setup

@@ -1,0 +1,106 @@
+---
+- name: Secure critical file permissions
+  block:
+    - name: Check existence of grub boot files and directories
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop:
+        - path: /etc/grub.conf
+          mode: "0600"
+        - path: /etc/grub.d
+          mode: "0750"
+          recurse: true
+        - path: /boot/grub2/grub.cfg
+          mode: "0600"
+        - path: /boot/grub/grub.cfg
+          mode: "0600"
+      register: grub_file_stats
+      when:
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+
+    - name: Set permissions and ownership for grub boot files
+      ansible.builtin.file:
+        path: "{{ item.item.path }}"
+        owner: "{{ item.item.owner | default('root') }}"
+        group: "{{ item.item.group | default('root') }}"
+        mode: "{{ item.item.mode }}"
+        recurse: "{{ item.item.recurse | default(false) }}"
+      loop: "{{ grub_file_stats.results | default([]) }}"
+      when:
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+        - item.stat.exists
+
+    - name: Check existence of sensitive system files and directories
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop:
+        - path: /etc/passwd
+          mode: "0644"
+        - path: /etc/group
+          mode: "0644"
+        - path: /etc/cron.hourly
+          mode: "0700"
+          recurse: true
+        - path: /etc/cron.daily
+          mode: "0700"
+          recurse: true
+        - path: /etc/cron.weekly
+          mode: "0700"
+          recurse: true
+        - path: /etc/cron.monthly
+          mode: "0700"
+          recurse: true
+        - path: /etc/cron.d
+          mode: "0700"
+        - path: /etc/crontab
+          mode: "0600"
+        - path: /etc/shadow
+          mode: "0600"
+        - path: /etc/sudoers.d
+          mode: "0750"
+        - path: /etc/ssh/sshd_config
+          mode: "0600"
+        - path: /usr/bin/w
+          mode: "0750"
+        - path: /usr/bin/who
+          mode: "0750"
+        - path: /etc/sysctl.conf
+          mode: "0600"
+        - path: /etc/motd
+          mode: "0644"
+      register: sensitive_file_stats
+
+    - name: Set permissions and ownership for sensitive system files
+      ansible.builtin.file:
+        path: "{{ item.item.path }}"
+        mode: "{{ item.item.mode }}"
+        recurse: "{{ item.item.recurse | default(false) }}"
+      loop: "{{ sensitive_file_stats.results | default([]) }}"
+      when: item.stat.exists
+
+    - name: Setup ansible Home Directory
+      ansible.builtin.file:
+        path: "/home/{{ ansible_service_user | default('ansible') }}"
+        owner: "{{ ansible_service_user | default('ansible') }}"
+        group: "{{ ansible_service_user | default('ansible') }}"
+        mode: "0750"
+        state: directory
+      ignore_errors: true
+
+    - name: Run depmod
+      ansible.builtin.command:
+        cmd: depmod -ae
+      changed_when: true
+      ignore_errors: true
+      when:
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+
+    - name: Update initramfs
+      ansible.builtin.command:
+        cmd: update-initramfs -u -k all
+      changed_when: true
+      ignore_errors: true
+      when:
+        - ansible_facts['virtualization_type'] | default('') != 'lxc'
+  tags:
+    - secure-system-permissions

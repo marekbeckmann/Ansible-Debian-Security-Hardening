@@ -1,0 +1,124 @@
+---
+- name: Setup UFW firewall rules
+  block:
+    - name: Check if UFW is installed
+      ansible.builtin.stat:
+        path: /etc/ufw
+      register: ufw_dir_stat
+
+    - name: Ensure UFW is installed
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+      when: not ufw_dir_stat.stat.exists
+
+    - name: Reset UFW rules if requested
+      ansible.builtin.shell:
+        cmd: echo "y" | ufw reset
+        executable: /bin/bash
+      when: ufw_reset_rules | default(false) | bool
+      register: ufw_reset_result
+      changed_when: true
+      failed_when: ufw_reset_result.rc != 0
+
+    - name: Disable UFW during rule configuration
+      community.general.ufw:
+        state: disabled
+      when: ufw_reset_rules | default(false) | bool
+
+    - name: Load UFW port mapping variables
+      ansible.builtin.include_vars:
+        file: firewall-ports-mapping.yml
+
+    - name: Set UFW logging level
+      community.general.ufw:
+        logging: low
+
+    - name: Set UFW default policy to deny incoming
+      community.general.ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Set UFW default policy to allow outgoing
+      community.general.ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: Allow traffic for basic services
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port | string if item.port is defined else omit }}"
+        proto: "{{ item.proto | default('tcp') }}"
+        from_ip: "{{ item.from | default(omit) }}"
+        comment: "{{ item.description | default(omit) }}"
+      loop: "{{ ufw_allowed_services['all'] | default([]) }}"
+      notify:
+        - Restart UFW
+
+    - name: Ensure active SSH port is permitted in UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ ssh_port | default(22) | string }}"
+        proto: tcp
+        comment: "SSH management access (dynamic port)"
+      when: ssh_port is defined and (ssh_port | int) != 22
+      notify:
+        - Restart UFW
+
+    - name: Gather group-based services
+      ansible.builtin.set_fact:
+        group_based_services: "{{ group_names | select('in', ufw_allowed_services.keys()) | map('extract', ufw_allowed_services) | flatten | list }}"
+
+    - name: Allow traffic for group-based services (single source or public)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port | string if item.port is defined else omit }}"
+        proto: "{{ item.proto | default('tcp') }}"
+        from_ip: "{{ item.from | default(omit) }}"
+        comment: "{{ item.description | default(omit) }}"
+      loop: "{{ group_based_services | rejectattr('from_ips', 'defined') | selectattr('port', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.port }}/{{ item.proto | default('tcp') }} from {{ item.from | default('Anywhere') }}"
+      notify:
+        - Restart UFW
+
+    - name: Allow traffic for group-based services (scoped peer IP lists)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.0.port | string }}"
+        proto: "{{ item.0.proto | default('tcp') }}"
+        from_ip: "{{ item.1 }}"
+        comment: "{{ item.0.description | default(omit) }}"
+      loop: "{{ group_based_services | selectattr('from_ips', 'defined') | list | subelements('from_ips') }}"
+      loop_control:
+        label: "{{ item.0.port }}/{{ item.0.proto | default('tcp') }} from {{ item.1 }}"
+      notify:
+        - Restart UFW
+
+    - name: Gather variable-based services
+      ansible.builtin.set_fact:
+        variable_based_services: "{{ hostvars[inventory_hostname] | select('in', (ufw_custom_services | default({})).keys()) | map('extract', (ufw_custom_services | default({}))) | flatten | list }}"
+
+    - name: Allow traffic for variable-based services
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port | string if item.port is defined else omit }}"
+        proto: "{{ item.proto | default('tcp') }}"
+        from_ip: "{{ item.from | default(omit) }}"
+        comment: "{{ item.description | default(omit) }}"
+      loop: "{{ variable_based_services | default([]) }}"
+      when:
+        - "customFwRule | default(false) | bool"
+      notify:
+        - Restart UFW
+
+    - name: Enable UFW firewall service
+      community.general.ufw:
+        state: enabled
+
+  when:
+    - not (is_lxc | default(false) | bool)
+    - ufw_enabled | default(false) | bool
+  tags:
+    - firewall-setup
+    - ufw-setup

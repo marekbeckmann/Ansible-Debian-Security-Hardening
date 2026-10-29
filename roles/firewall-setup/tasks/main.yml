@@ -1,0 +1,33 @@
+---
+- name: Configure firewall
+  block:
+    - name: Set custom distribution facts
+      ansible.builtin.set_fact:
+        distro: "{{ ansible_facts['distribution'] | lower }}"
+        osfamily: "{{ ansible_facts['os_family'] | lower }}"
+
+    - name: Detect Proxmox VE
+      ansible.builtin.stat:
+        path: /etc/pve
+      register: is_pve
+
+    - name: Include firewall tasks for OS family
+      ansible.builtin.include_tasks: "setup-firewall.{{ osfamily }}.yml"
+      when:
+        - "ufw_enabled | default(true) | bool"
+        - not (is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false))
+      tags:
+        - ufw-setup
+        - firewall-setup
+
+    - name: Include Proxmox firewall tasks
+      ansible.builtin.include_tasks: "setup-firewall.pve.yml"
+      when: is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)
+      tags:
+        - pve-firewall-setup
+        - firewall-setup
+
+  tags:
+    - firewall-setup
+    - ufw-setup
+    - pve-firewall-setup

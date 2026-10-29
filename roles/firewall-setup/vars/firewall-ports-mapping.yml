@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Centralized UFW Firewall Port and Protocol Mappings
+# ==============================================================================
+
+ufw_allowed_services:
+  # Base services allowed on all managed hosts
+  all:
+    - port: 22
+      proto: tcp
+      # from: 
+      description: "SSH management access"
+  # webserver:
+  #   - port: 443
+  #     proto: tcp
+  #     # from:
+  #     # from_ips: 
+  #     description: "Webserver"
+
+ufw_custom_services: {}

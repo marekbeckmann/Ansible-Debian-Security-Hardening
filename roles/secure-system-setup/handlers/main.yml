@@ -1,0 +1,31 @@
+---
+- name: Restart UFW
+  ansible.builtin.systemd:
+    name: ufw
+    state: restarted
+
+- name: Restart Fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  listen: "restart services"
+
+- name: Restart firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: restarted
+  listen: "restart services"
+
+- name: Restart apt-daily timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: "apt-daily.timer"
+    state: restarted
+    enabled: true
+
+- name: Restart apt-daily-upgrade timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: "apt-daily-upgrade.timer"
+    state: restarted
+    enabled: true

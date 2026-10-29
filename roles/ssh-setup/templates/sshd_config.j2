@@ -1,0 +1,74 @@
+#General
+Port {{ ssh_port }}
+#AddressFamily any
+#ListenAddress 0.0.0.0
+#ListenAddress ::
+
+#Authentication
+Protocol 2
+AllowGroups {{ ssh_groups_allow }} 
+KbdInteractiveAuthentication no
+AuthenticationMethods publickey
+PermitRootLogin {% if (is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)) or (permit_root_login | default(false) | bool) %}prohibit-password{% else %}no{% endif %}
+PasswordAuthentication no
+PermitEmptyPasswords no
+PubkeyAuthentication yes
+AuthorizedKeysFile      .ssh/authorized_keys{% if is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false) %} /etc/pve/priv/authorized_keys{% endif %}
+UsePAM yes
+MaxAuthTries 3
+
+# Ciphers and keying
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+
+# add "mlkem768x25519-sha256," if all systems run openssh 9.9 or higher
+KexAlgorithms sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
+
+# Logging
+LogLevel VERBOSE
+
+#Misc
+UseDNS no
+IgnoreRhosts yes
+HostbasedAuthentication no
+X11Forwarding no
+AcceptEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+AcceptEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+AcceptEnv LC_IDENTIFICATION LC_ALL
+{% if is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false) %}
+AcceptEnv LANG LC_*
+{% endif %}
+{% if (is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)) or (ssh_tunnel | default(false) | bool) %}
+AllowTcpForwarding yes
+TCPKeepAlive yes
+AllowAgentForwarding yes
+{% else %}
+AllowTcpForwarding no
+TCPKeepAlive no
+AllowAgentForwarding no
+{% endif %}
+Compression no
+ClientAliveCountMax {{ ssh_client_alive_count_max | default(2) }}
+ClientAliveInterval {{ ssh_client_alive_interval | default(300) }}
+{% if is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false) %}
+MaxSessions 5
+{% else %}
+MaxSessions 2
+# Disable connection penalties for automation
+PerSourcePenalties no
+{% endif %}
+
+Banner /etc/issue.net
+PrintMotd no
+
+Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
+{% if (is_pve.stat.exists | default(false) and is_pve.stat.isdir | default(false)) or (permit_root_login | default(false) | bool) %}
+Match User {{ (ssh_admin_users | default(['ansible']) + ['root']) | unique | join(',') }}
+  AuthenticationMethods publickey
+{% else %}
+Match User {{ ssh_admin_users | default(['ansible']) | join(',') }}
+  AuthenticationMethods publickey
+{% endif %}

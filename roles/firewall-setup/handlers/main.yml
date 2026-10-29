@@ -1,0 +1,14 @@
+---
+- name: Restart UFW
+  ansible.builtin.systemd:
+    name: ufw
+    state: restarted
+
+- name: Restart firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: restarted
+
+- name: Restart PVE firewall
+  ansible.builtin.command: pve-firewall restart
+  changed_when: true

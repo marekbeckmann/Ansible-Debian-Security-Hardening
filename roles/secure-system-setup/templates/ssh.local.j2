@@ -1,0 +1,12 @@
+[sshd]
+enabled = true
+banaction = {{ fail2ban_banaction_allports | default('iptables-allports') }}
+port = {{ ssh_port | default('ssh') }}
+filter = sshd
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+maxretry = {{ fail2ban_maxretry | default(10) }}
+{% if vault_discord_webhook_url_f2b is defined and vault_discord_webhook_url_f2b %}
+action = %(banaction)s[name=%(__name__)s, port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+         discord_notifications
+{% endif %}

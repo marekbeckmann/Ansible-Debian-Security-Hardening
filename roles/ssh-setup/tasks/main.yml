@@ -1,0 +1,13 @@
+---
+- name: Configure SSH server security
+  block:
+    - name: Set custom distribution facts
+      ansible.builtin.set_fact:
+        distro: "{{ ansible_facts['distribution'] | lower }}"
+        osfamily: "{{ ansible_facts['os_family'] | lower }}"
+        dist_release: "{{ ansible_facts['distribution_release'] }}"
+
+    - name: Include SSH configuration tasks
+      ansible.builtin.include_tasks: "configure-ssh.yml"
+  tags:
+    - ssh-setup

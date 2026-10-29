@@ -1,0 +1,26 @@
+[Definition]
+
+actionstart = curl -X POST "<webhook>" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "Fail2Ban", "content":"\n:green_circle: **[RESOLVED]** Jail **`<name>`** has been started on **<hostname>**"}'
+
+actionstop = curl -X POST "<webhook>" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "Fail2Ban", "content":"\n:red_circle: **[WARNING]** Jail **`<name>`** has been stopped on **<hostname>**"}'
+
+actionban = curl -X POST "<webhook>" \
+            -H "Content-Type: application/json" \
+            -d '{"username":"Fail2Ban", "content":"\n:name_badge: **BANNED** IP `<ip>` from **<hostname>** in Jail `<name>` after **<failures>** failure(s). \nUnban by running: \n```fail2ban-client unban <ip>``` \n Inspect Logs by running: \n```sudo grep <ip> /var/log/auth.log``` \n<@&1028227983074394122>"}'
+
+actionunban = curl -X POST "<webhook>" \
+            -H "Content-Type: application/json" \
+            -d '{"username":"Fail2Ban", "content":"\n:white_check_mark:  **UNBANNED** IP `<ip>` from **<hostname>** in Jail **<name>** \n<@&1028227983074394122>"}'
+
+[Init]
+
+# Name of the jail in your jail.local file. default = [your-jail-name]
+name = default
+
+# Discord Webhook URL
+webhook = {{ vault_discord_webhook_url_f2b }}
+hostname = {{ ansible_facts['hostname'] | default(inventory_hostname) }}

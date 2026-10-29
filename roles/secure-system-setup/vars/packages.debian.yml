@@ -1,0 +1,25 @@
+packages:
+  - acl
+  - apt-transport-https
+  - ca-certificates
+  - host
+  - gnupg
+  - lsb-release
+  - libpam-google-authenticator
+  - ufw
+  - auditd
+  - audispd-plugins
+  - rsyslog
+  - chkrootkit
+  - curl
+  - unattended-upgrades
+  - apt-config-auto-update
+  - apt-listchanges
+  - apticron
+  - debsecan
+  - debsums
+  - apt-show-versions
+  - dos2unix
+  - rng-tools
+  - needrestart
+  - powermgmt-base
