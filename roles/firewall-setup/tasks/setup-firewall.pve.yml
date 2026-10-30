@@ -88,22 +88,6 @@
       when: pve_cluster_fw_diff.rc != 0
       notify: Restart PVE firewall
 
-    - name: Ensure Proxmox node host firewall configuration exists and is enabled
-      ansible.builtin.copy:
-        dest: "/etc/pve/nodes/{{ ansible_facts['hostname'] }}/host.fw"
-        content: |
-          [OPTIONS]
-          enable: {{ 1 if (pve_firewall_enable_host | default(true) | bool) else 0 }}
-          {% if pve_firewall_nf_conntrack_allow_invalid is defined %}
-          nf_conntrack_allow_invalid: {{ pve_firewall_nf_conntrack_allow_invalid }}
-          {% endif %}
-        owner: root
-        group: root
-        mode: "0600"
-      when:
-        - pve_firewall_enable_host | default(true) | bool
-      notify: Restart PVE firewall
-
     - name: Clean up temporary firewall staging files
       ansible.builtin.file:
         path: "{{ item }}"
