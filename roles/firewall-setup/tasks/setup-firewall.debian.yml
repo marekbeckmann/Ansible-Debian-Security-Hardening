@@ -118,6 +118,7 @@
 
   when:
     - not (is_lxc | default(false) | bool)
+    - ansible_facts['virtualization_type'] | default('') != 'lxc'
     - ufw_enabled | default(false) | bool
   tags:
     - firewall-setup

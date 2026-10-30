@@ -15,7 +15,7 @@ The repository provides three focused, composable Ansible roles:
 | :-------------------------------------------------- | :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[`secure-system-setup`](#1-secure-system-setup)** | Debian / Ubuntu / LXC | Base OS hardening: security packages, sysctl kernel parameters, driver blacklisting, strict file permissions, automated security upgrades (`unattended-upgrades`), and Fail2ban intrusion prevention with optional Discord notifications. |
 | **[`ssh-setup`](#2-ssh-setup)**                     | Debian / Ubuntu / PVE | Hardened OpenSSH daemon configuration with modern cryptography (Post-Quantum & Curve25519 KEX), public-key-only authentication, access control groups, and inter-node cluster SSH integration for Proxmox VE.                             |
-| **[`firewall-setup`](#3-firewall-setup)**           | Debian / Ubuntu / PVE | Dual-mode firewall automation: applies **UFW** on standard Debian/Ubuntu systems and manages the **Proxmox VE Cluster & Node Firewall** (`/etc/pve/firewall/cluster.fw` & `host.fw`) with safe staging to prevent management lockouts.    |
+| **[`firewall-setup`](#3-firewall-setup)**           | Debian / Ubuntu / PVE | Dual-mode firewall automation: applies **UFW** on standard Debian/Ubuntu systems and manages the **Proxmox VE Cluster Firewall** (`/etc/pve/firewall/cluster.fw`) with safe staging to prevent management lockouts.                |
 
 ---
 
@@ -159,15 +159,20 @@ ssh_client_alive_count_max: 2
 
 Provides firewall management tailored to the host environment:
 
+> [!IMPORTANT]
+> **Host Firewall Scope & LXC Recommendations**:
+> * **Proxmox Node Firewall (`host.fw`)**: Node-specific host firewall configurations (`/etc/pve/nodes/<hostname>/host.fw`) are intentionally out-of-scope for this role. Node-level overrides or options should be managed directly through Proxmox VE (GUI or CLI).
+> * **Recommended Firewall for LXC Containers**: For LXC containers running on Proxmox VE, it is strongly recommended to use the **Proxmox Host / Hypervisor Firewall** (configured at the container or datacenter level via `/etc/pve/firewall/<vmid>.fw` or the PVE Web GUI) rather than running an in-guest firewall such as `ufw`.
+
 ### Modes
 1. **Standard Debian/Ubuntu Nodes (`setup-firewall.debian.yml`)**:
    * Uses **UFW** with default incoming policy `deny` and outgoing policy `allow`.
    * Maps group-based and variable-based open ports via `vars/firewall-ports-mapping.yml`.
    * Automatically guarantees that the configured `ssh_port` is allowed to prevent accidental lockouts.
+   * Automatically skips UFW execution inside LXC containers (`ansible_facts['virtualization_type'] == 'lxc'` or `is_lxc: true`).
 2. **Proxmox VE Hypervisors (`setup-firewall.pve.yml`)**:
-   * Generates and validates the cluster firewall configuration (`/etc/pve/firewall/cluster.fw`).
+   * Generates and validates the cluster/datacenter firewall configuration (`/etc/pve/firewall/cluster.fw`).
    * **Safe Staging Workflow**: Deploys the configuration in Stage 1 with `policy_in: ACCEPT`, verifies that the security group (`basic-ruleset`) is active in `pvesh get /cluster/firewall/rules`, and only then applies the final `policy_in: DROP`.
-   * Enables the host firewall in `/etc/pve/nodes/<hostname>/host.fw`.
    * Automatically allows PVE Web GUI (8006), SPICE Proxy (3128), VNC (5900-5999), Corosync (5404-5412), Ceph, Live Migration (60000-60050), and SSH.
 
 ### Key Variables (`defaults/main.yml`)
@@ -182,8 +187,6 @@ pve_firewall_enable: 1
 pve_firewall_policy_in: DROP
 pve_firewall_policy_out: ACCEPT
 pve_firewall_group_name: basic-ruleset
-pve_firewall_enable_host: true
-pve_firewall_nf_conntrack_allow_invalid: 1
 
 # Interfaces to bind rules to (empty list binds to all interfaces)
 pve_firewall_interfaces: []
@@ -241,7 +244,6 @@ pve_firewall_custom_rules: []
   vars:
     ssh_pve_cluster_hosts: "10.10.10.* 192.168.1.* pve-node*"
     pve_firewall_policy_in: "DROP"
-    pve_firewall_enable_host: true
     pve_firewall_custom_rules:
       - "IN ACCEPT -p tcp -dport 9100 -log nolog # Prometheus Node Exporter"
   roles:

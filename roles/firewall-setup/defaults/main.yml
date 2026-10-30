@@ -16,9 +16,5 @@ pve_firewall_group_name: basic-ruleset
 # If empty, rules apply to all interfaces to prevent lockouts on nodes without bonds.
 pve_firewall_interfaces: []
 
-# Ensure host-level firewall is enabled in /etc/pve/nodes/<hostname>/host.fw
-pve_firewall_enable_host: true
-pve_firewall_nf_conntrack_allow_invalid: 1
-
 # Additional custom rules to append to the security group
 pve_firewall_custom_rules: []
